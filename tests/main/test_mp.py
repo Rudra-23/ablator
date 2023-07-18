@@ -1,4 +1,3 @@
-from multiprocessing import Process
 import shutil
 import uuid
 from pathlib import Path
@@ -20,12 +19,11 @@ from ablator import (
     TrainConfig,
 )
 from ablator.config.main import configclass
-from ablator.config.mp import ParallelConfig, SearchAlgo, SearchSpace
+from ablator.config.mp import ParallelConfig, SearchSpace
 from ablator.main.mp import ParallelTrainer, train_main_remote
 from ablator.main.state.store import TrialState
 from ablator.modules.loggers.file import FileLogger
 from ablator.mp.node_manager import NodeManager, Resource
-from ablator.utils.base import Dummy
 
 LR_ERROR_LIMIT = 5
 
@@ -597,25 +595,106 @@ def test_relative_path(tmp_path: Path, wrapper):
     )
 
 
+class MyCustomModelEval(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__()
+        self.param = nn.Parameter(torch.ones(100))
+
+    def forward(self, x: torch.Tensor):
+        x =  self.param + x * 0.01
+        return {"preds": x}, x.sum().abs()
+
+
+class TestWrapperEval(ModelWrapper):
+    def make_dataloader_train(self, run_config: RunConfig):
+        dl = [torch.full((100,), 4.0) for i in range(100)]
+        return dl
+
+    def make_dataloader_val(self, run_config: RunConfig):
+        dl = [torch.full((100,), 3.0) for i in range(100)]
+        return dl
+
+    def make_dataloader_test(self, run_config: RunConfig):
+        dl = [torch.full((100,), 3.0) for i in range(100)]
+        return dl
+
+def test_mp_evaluate(tmp_path: Path):
+    train_config = TrainConfig(
+    dataset="test",
+    batch_size=128,
+    epochs=2,
+    optimizer_config=OptimizerConfig(name="sgd", arguments={"lr": 0.1}),
+    scheduler_config=None,
+    )
+
+    config = ParallelConfig(
+        train_config=train_config,
+        model_config=ModelConfig(),
+        verbose="console",
+        device="cpu",
+        amp=False,
+        search_space={
+        "train_config.optimizer_config.arguments.lr": SearchSpace(
+            value_range=[0.01, 0.1], value_type="float"
+            ),
+        },
+        optim_metrics={"val_loss": "min"},
+        total_trials=3,
+        concurrent_trials=3,
+        gpu_mb_per_experiment=100,
+        experiment_dir = "/tmp/"
+    )
+
+    wrapper = TestWrapperEval(MyCustomModelEval)
+    config.experiment_dir = tmp_path
+
+    shutil.rmtree(tmp_path, ignore_errors=True)
+    ablator = ParallelTrainer(wrapper=wrapper, run_config = config)
+    ablator.launch(working_directory = Path(__file__).parent.as_posix(), ray_head_address=None)
+
+    # breaking down [ParallelTrainer] ablator.evaluate() to verify metrics
+
+    eval_configs = []
+    trial_uids = ablator.experiment_state.complete_trials
+    for config in trial_uids:
+        model_config = type(ablator.run_config).load(
+            ablator.experiment_dir.joinpath(config.uid, "config.yaml")
+        )
+        eval_configs.append(model_config)
+
+
+    for model_config in eval_configs:
+        metrics = ablator.wrapper.evaluate(model_config)
+
+        # To check whether metrics are produced for all the dataloaders provided.
+        assert all(key in metrics.keys() for key in ["val","test"])
+
+        # The val_loss of validation dataloader should be same as val_loss during last epoch.
+        assert metrics['val'].to_dict()["val_loss"] == ablator.wrapper.metrics.to_dict()["val_loss"]
+        # test and val dataloaders are the same and there is not randomization in the model. 
+        # Therefore, val_loss and test_loss must be same.
+        assert metrics['val'].to_dict()["val_loss"] == metrics['test'].to_dict()["test_loss"]
+
+
 if __name__ == "__main__":
-    from tests.conftest import DockerRayCluster
-    from tests.conftest import _assert_error_msg, _capture_output
+    # from tests.conftest import DockerRayCluster
+    # from tests.conftest import _assert_error_msg, _capture_output
 
     tmp_path = Path("/tmp/experiment_dir")
     shutil.rmtree(tmp_path, ignore_errors=True)
     # p = Process(target=_mp_test, args=(tmp_path,))
     # p.start()
     # p.join()
-    # ray_cluster = DockerRayCluster()
-    # ray_cluster.setUp(WORKING_DIR)
-    # tmp_path.mkdir()
+    ray_cluster = DockerRayCluster()
+    ray_cluster.setUp(WORKING_DIR)
+    tmp_path.mkdir()
     error_wrapper = TestWrapper(MyErrorCustomModel)
-    wrapper = TestWrapper(MyErrorCustomModel)
-    test_train_main_remote(
-        tmp_path, _assert_error_msg, _capture_output, error_wrapper, wrapper=wrapper
-    )
+    # wrapper = TestWrapper(MyErrorCustomModel)
+    # test_train_main_remote(
+    #     tmp_path, _assert_error_msg, _capture_output, error_wrapper, wrapper=wrapper
+    # )
 
-    # test_mp_run(tmp_path, _assert_error_msg, ray_cluster)
+    test_mp_run(tmp_path, _assert_error_msg, ray_cluster, error_wrapper)
     # test_pre_train_setup(tmp_path)
 
     # breakpoint()
@@ -626,7 +705,7 @@ if __name__ == "__main__":
     # shutil.rmtree(tmp_path, ignore_errors=True)
     # tmp_path.mkdir()
 
-    test_ray_init(tmp_path, _capture_output)
+    # test_ray_init(tmp_path, _capture_output)
     # test_mp_sampling_limits(tmp_path)
     # test_zombie_remotes(tmp_path)
 
@@ -636,3 +715,5 @@ if __name__ == "__main__":
     # shutil.rmtree(tmp_path, ignore_errors=True)
     # tmp_path.mkdir()
     # test_relative_path(tmp_path)
+
+    test_mp_evaluate(tmp_path)
