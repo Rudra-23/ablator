@@ -54,7 +54,7 @@ amp_config = RunConfig(
 class BadMyModel(nn.Module):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__()
-        self.param = nn.Parameter(torch.ones(100))
+        self.param = nn.Parameter(torch.ones(100, 1))
 
     def forward(self, x: torch.Tensor):
         x = self.param + torch.rand_like(self.param) * 0.01
@@ -64,7 +64,7 @@ class BadMyModel(nn.Module):
 class MyModel(nn.Module):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__()
-        self.param = nn.Parameter(torch.ones(100))
+        self.param = nn.Parameter(torch.ones(100, 1))
 
     def forward(self, x: torch.Tensor):
         x = self.param + torch.rand_like(self.param) * 0.01
@@ -74,7 +74,7 @@ class MyModel(nn.Module):
 class MyUnstableModel(nn.Module):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__()
-        self.param = nn.Parameter(torch.ones(100))
+        self.param = nn.Parameter(torch.ones(100, 1))
         self.iteration = 0
 
     def forward(self, x: torch.Tensor):
@@ -89,7 +89,7 @@ class MyUnstableModel(nn.Module):
 class MyWrongCustomModel(nn.Module):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__()
-        self.param = nn.Parameter(torch.ones(100))
+        self.param = nn.Parameter(torch.ones(100, 1))
         self.iteration = 0
 
     def forward(self, x: torch.Tensor):
@@ -103,7 +103,7 @@ class MyWrongCustomModel(nn.Module):
 class MyCustomModel(nn.Module):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__()
-        self.param = nn.Parameter(torch.ones(100))
+        self.param = nn.Parameter(torch.ones(100, 1))
         self.iteration = 0
 
     def forward(self, x: torch.Tensor):
@@ -137,7 +137,7 @@ class MyReturnNoneModel(nn.Module):
 class MyBadModel(nn.Module):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__()
-        self.param = nn.Parameter(torch.ones(100))
+        self.param = nn.Parameter(torch.ones(100, 1))
         self.iteration = 0
 
     def forward(self, x: torch.Tensor):
@@ -535,10 +535,11 @@ if __name__ == "__main__":
     shutil.rmtree(tmp_path.joinpath("test_exp"), ignore_errors=True)
     # test_load_save(tmp_path, _assert_error_msg)
     # test_load_save_errors(tmp_path, _assert_error_msg)
-    # test_error_models()
-    # test_train_stats()
+    test_error_models(_assert_error_msg)
+    test_train_stats()
     # test_state()
-    # test_verbosity()
+
+    test_verbosity()
     # test_train_resume(tmp_path, _assert_error_msg)
     # test_train_loop()
     # test_validation_loop()

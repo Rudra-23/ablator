@@ -85,7 +85,7 @@ class MyErrorCustomModel(nn.Module):
     def __init__(self, config: CustomModelConfig) -> None:
         super().__init__()
         self.lr = config.lr
-        self.param = nn.Parameter(torch.ones(100))
+        self.param = nn.Parameter(torch.ones(100, 1))
         self.itr = 0
 
     def forward(self, x: torch.Tensor):
@@ -100,7 +100,7 @@ class MyDivCustomModel(nn.Module):
     def __init__(self, config: CustomModelConfig) -> None:
         super().__init__()
         self.lr = config.lr
-        self.param = nn.Parameter(torch.ones(100))
+        self.param = nn.Parameter(torch.ones(100, 1))
         self.itr = 0
 
     def forward(self, x: torch.Tensor):
@@ -115,7 +115,7 @@ class MyCustomModel(nn.Module):
     def __init__(self, config: CustomModelConfig) -> None:
         super().__init__()
         self.lr = config.lr
-        self.param = nn.Parameter(torch.ones(100))
+        self.param = nn.Parameter(torch.ones(100, 1))
         self.itr = 0
 
     def forward(self, x: torch.Tensor):
